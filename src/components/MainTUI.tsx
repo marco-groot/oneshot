@@ -21,6 +21,7 @@ export function MainTUI() {
   const [currentTaskNumber, setCurrentTaskNumber] = useState<number | null>(null);
   const [pendingPrTaskNumber, setPendingPrTaskNumber] = useState<number | null>(null);
   const [isExecutingTask, setIsExecutingTask] = useState(false);
+  const [isDeletingTask, setIsDeletingTask] = useState(false);
   const [currentStage, setCurrentStage] = useState<ProgressStage>('worktree');
   const [executionError, setExecutionError] = useState<string | undefined>();
   const { exit } = useApp();
@@ -202,9 +203,23 @@ export function MainTUI() {
             const task = getTaskByNumber(taskNumber);
             if (task) {
               try {
+                setIsDeletingTask(true);
+                setExecutionError(undefined);
+
+                setCurrentStage('deleting_worktree');
+                await new Promise((resolve) => setTimeout(resolve, 100));
                 removeWorktree(task.worktreePath);
+
+                setCurrentStage('deleting_branch');
+                await new Promise((resolve) => setTimeout(resolve, 100));
                 deleteBranch(task.branchName);
+
+                setCurrentStage('deleting_task');
+                await new Promise((resolve) => setTimeout(resolve, 100));
                 deleteTask(task.id);
+
+                setCurrentStage('completed');
+                await new Promise((resolve) => setTimeout(resolve, 300));
 
                 if (viewMode === 'task_detail' && currentTaskNumber === taskNumber) {
                   shouldExitTaskDetail = true;
@@ -213,7 +228,11 @@ export function MainTUI() {
                 results.push(`✓ Task #${taskNumber} deleted (worktree, branch, and remote cleaned up)`);
               } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                setExecutionError(errorMessage);
                 results.push(`✗ Failed to delete task #${taskNumber}: ${errorMessage}`);
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              } finally {
+                setIsDeletingTask(false);
               }
             } else {
               results.push(`✗ Task #${taskNumber} not found`);
@@ -358,13 +377,15 @@ export function MainTUI() {
 
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         {isExecutingTask ? (
-          <LoadingProgress currentStage={currentStage} error={executionError} />
+          <LoadingProgress currentStage={currentStage} error={executionError} mode="execution" />
+        ) : isDeletingTask ? (
+          <LoadingProgress currentStage={currentStage} error={executionError} mode="deletion" />
         ) : (
           renderContent()
         )}
       </Box>
 
-      {output && !isExecutingTask && (
+      {output && !isExecutingTask && !isDeletingTask && (
         <Box borderStyle="single" borderColor="gray" paddingX={1} marginY={1}>
           <Text>{output}</Text>
         </Box>

@@ -9,6 +9,9 @@ export type ProgressStage =
   | 'claude_executing'
   | 'committing'
   | 'creating_pr'
+  | 'deleting_worktree'
+  | 'deleting_branch'
+  | 'deleting_task'
   | 'completed';
 
 export type StageStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
@@ -22,6 +25,7 @@ export interface ProgressState {
 interface LoadingProgressProps {
   currentStage: ProgressStage;
   error?: string;
+  mode?: 'execution' | 'deletion';
 }
 
 const STAGE_INFO: Record<ProgressStage, { label: string; icon: string }> = {
@@ -31,10 +35,13 @@ const STAGE_INFO: Record<ProgressStage, { label: string; icon: string }> = {
   claude_executing: { label: 'Claude is making changes', icon: '⚡' },
   committing: { label: 'Committing changes to git', icon: '📦' },
   creating_pr: { label: 'Creating pull request', icon: '🚀' },
+  deleting_worktree: { label: 'Removing git worktree', icon: '🗑️' },
+  deleting_branch: { label: 'Deleting branch (local and remote)', icon: '🔥' },
+  deleting_task: { label: 'Removing task record', icon: '📝' },
   completed: { label: 'Task completed', icon: '✅' },
 };
 
-const STAGE_ORDER: ProgressStage[] = [
+const EXECUTION_STAGE_ORDER: ProgressStage[] = [
   'worktree',
   'claude_init',
   'claude_thinking',
@@ -44,7 +51,15 @@ const STAGE_ORDER: ProgressStage[] = [
   'completed',
 ];
 
-export function LoadingProgress({ currentStage, error }: LoadingProgressProps) {
+const DELETION_STAGE_ORDER: ProgressStage[] = [
+  'deleting_worktree',
+  'deleting_branch',
+  'deleting_task',
+  'completed',
+];
+
+export function LoadingProgress({ currentStage, error, mode = 'execution' }: LoadingProgressProps) {
+  const STAGE_ORDER = mode === 'deletion' ? DELETION_STAGE_ORDER : EXECUTION_STAGE_ORDER;
   const [dots, setDots] = useState('');
 
   useEffect(() => {
@@ -105,11 +120,13 @@ export function LoadingProgress({ currentStage, error }: LoadingProgressProps) {
     );
   };
 
+  const title = mode === 'deletion' ? '🗑️  Task Deletion Progress' : '⚙️  Task Execution Progress';
+
   return (
     <Box flexDirection="column" paddingY={1}>
       <Box marginBottom={1}>
         <Text bold color="cyan">
-          ⚙️  Task Execution Progress
+          {title}
         </Text>
       </Box>
 
