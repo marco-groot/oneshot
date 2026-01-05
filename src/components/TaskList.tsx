@@ -101,8 +101,19 @@ function TaskRow({ task }: { task: Task }) {
           <Text color={statusColor}>{statusIcon}</Text>
         )}
       </Box>
-      <Box flexGrow={1}>
+      <Box width={30}>
         <Text bold={needsAction || isRunning}>{task.name}</Text>
+      </Box>
+      <Box width={35}>
+        {task.prUrl ? (
+          <Text color="cyan" dimColor>
+            {task.prUrl}
+          </Text>
+        ) : (
+          <Text color="gray" dimColor>
+            -
+          </Text>
+        )}
       </Box>
       <Box width={20}>
         <Text color="gray" dimColor>
