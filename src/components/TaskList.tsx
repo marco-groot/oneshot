@@ -104,6 +104,7 @@ function TaskRow({ task }: { task: Task }) {
       <Box width={30}>
         <Text bold={needsAction || isRunning}>{task.name}</Text>
       </Box>
+      <Text> </Text>
       <Box width={35}>
         {task.prUrl ? (
           <Text color="cyan" dimColor>
