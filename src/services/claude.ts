@@ -61,7 +61,11 @@ export class ClaudeService {
     }
   }
 
-  async executeTaskInWorktree(prompt: string, worktreePath: string): Promise<ClaudeResponse> {
+  async executeTaskInWorktree(
+    prompt: string,
+    worktreePath: string,
+    onLog?: (log: string) => void
+  ): Promise<ClaudeResponse> {
     return new Promise((resolve, reject) => {
       const fullPrompt = `You are working in a git worktree at: ${worktreePath}
 
@@ -74,38 +78,75 @@ Important:
 - Ensure all changes are saved
 - The changes will be automatically committed and pushed`;
 
-      const claudeProcess = spawn('claude', [fullPrompt], {
+      onLog?.('Starting Claude CLI...\n');
+
+      const claudeProcess = spawn('claude', [
+        '--print',
+        '--tools', 'default',
+        '--dangerously-skip-permissions',
+      ], {
         cwd: worktreePath,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
       let output = '';
       let errorOutput = '';
+      let fullLogs = 'Starting Claude CLI...\n';
+      let hasReceivedData = false;
+
+      if (claudeProcess.stdin) {
+        claudeProcess.stdin.write(fullPrompt);
+        claudeProcess.stdin.end();
+        onLog?.('Prompt sent to Claude...\n');
+        fullLogs += 'Prompt sent to Claude...\n';
+      }
 
       claudeProcess.stdout?.on('data', (data) => {
-        output += data.toString();
+        const chunk = data.toString();
+        hasReceivedData = true;
+        output += chunk;
+        fullLogs += chunk;
+        if (onLog) {
+          onLog(chunk);
+        }
       });
 
       claudeProcess.stderr?.on('data', (data) => {
-        errorOutput += data.toString();
+        const chunk = data.toString();
+        hasReceivedData = true;
+        errorOutput += chunk;
+        fullLogs += `[stderr] ${chunk}`;
+        if (onLog) {
+          onLog(`[stderr] ${chunk}`);
+        }
       });
 
       claudeProcess.on('close', (code) => {
-        if (code === 0) {
+        if (code === 0 || output.length > 0) {
           resolve({
-            content: output || 'Task completed successfully',
+            content: fullLogs || output || 'Task completed successfully',
             usage: {
               inputTokens: 0,
               outputTokens: 0,
             },
           });
         } else {
-          reject(new Error(`Claude execution failed (code ${code}): ${errorOutput || output}`));
+          const errorMsg = `Claude execution failed (code ${code}): ${errorOutput || 'No output'}`;
+          fullLogs += `\n${errorMsg}`;
+          if (onLog) {
+            onLog(`\n${errorMsg}`);
+          }
+          reject(new Error(errorMsg));
         }
       });
 
       claudeProcess.on('error', (error) => {
-        reject(new Error(`Failed to start Claude CLI: ${error.message}`));
+        const errorMsg = `Failed to start Claude CLI: ${error.message}`;
+        fullLogs += `\n${errorMsg}`;
+        if (onLog) {
+          onLog(`\n${errorMsg}`);
+        }
+        reject(new Error(errorMsg));
       });
     });
   }

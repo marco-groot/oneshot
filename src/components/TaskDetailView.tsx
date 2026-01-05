@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import type { Task } from '../types.js';
 
 const STATUS_COLORS: Record<Task['status'], string> = {
@@ -18,6 +19,48 @@ const STATUS_ICONS: Record<Task['status'], string> = {
   failed: '✗',
 };
 
+function AnimatedStatusDots() {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => {
+        if (prev.length >= 3) return '';
+        return prev + '.';
+      });
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return <Text color="blue">{dots}</Text>;
+}
+
+function WaitingAnimation() {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => {
+        if (prev.length >= 3) return '';
+        return prev + '.';
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <Box>
+      <Text color="blue">
+        <Spinner type="dots" />
+      </Text>
+      <Text color="blue"> Waiting for Claude to start</Text>
+      <Text color="blue">{dots}</Text>
+    </Box>
+  );
+}
+
 interface TaskDetailViewProps {
   task: Task;
 }
@@ -29,78 +72,68 @@ export function TaskDetailView({ task }: TaskDetailViewProps) {
   return (
     <Box flexDirection="column" padding={1}>
       <Box marginBottom={1}>
-        <Text bold color="cyan">
-          Task #{task.number}: {task.name}
-        </Text>
-      </Box>
-
-      <Box marginBottom={1}>
-        <Box width={15}>
-          <Text dimColor>Status:</Text>
-        </Box>
-        <Box>
-          <Text color={statusColor}>
-            {statusIcon} {task.status}
-          </Text>
-        </Box>
-      </Box>
-
-      <Box marginBottom={1}>
-        <Box width={15}>
-          <Text dimColor>Branch:</Text>
-        </Box>
+        <Text dimColor>Branch: </Text>
         <Text>{task.branchName}</Text>
       </Box>
 
       <Box marginBottom={1}>
-        <Box width={15}>
-          <Text dimColor>Worktree:</Text>
-        </Box>
+        <Text dimColor>Worktree: </Text>
         <Text color="gray">{task.worktreePath}</Text>
       </Box>
 
       <Box marginBottom={1}>
-        <Box width={15}>
-          <Text dimColor>Created:</Text>
-        </Box>
-        <Text>{new Date(task.createdAt).toLocaleString()}</Text>
-      </Box>
-
-      {task.prUrl && (
-        <Box marginBottom={1}>
-          <Box width={15}>
-            <Text dimColor>Pull Request:</Text>
+        <Text dimColor>Status: </Text>
+        {task.status === 'in_progress' ? (
+          <Box>
+            <Text color={statusColor}>
+              <Spinner type="dots" />
+            </Text>
+            <Text color={statusColor}> {task.status}</Text>
+            <AnimatedStatusDots />
           </Box>
-          <Text color="cyan">{task.prUrl}</Text>
-        </Box>
-      )}
-
-      <Box marginBottom={1} marginTop={1}>
-        <Text bold underline>
-          Task Prompt:
-        </Text>
+        ) : (
+          <Text color={statusColor}>
+            {statusIcon} {task.status}
+          </Text>
+        )}
+        {task.prUrl && (
+          <>
+            <Text dimColor> • PR: </Text>
+            <Text color="cyan">{task.prUrl}</Text>
+          </>
+        )}
       </Box>
-      <Box marginBottom={1} paddingLeft={2}>
-        <Text>{task.prompt}</Text>
-      </Box>
 
-      {task.result && (
+      {(task.logs || task.status === 'in_progress') && (
         <>
           <Box marginBottom={1} marginTop={1}>
-            <Text bold underline color="green">
-              Result:
+            <Text bold underline color="cyan">
+              Claude Logs:
             </Text>
           </Box>
-          <Box marginBottom={1} paddingLeft={2}>
-            <Text>{task.result}</Text>
+          <Box
+            marginBottom={1}
+            paddingLeft={2}
+            borderStyle="single"
+            borderColor="gray"
+            paddingY={1}
+            paddingX={1}
+          >
+            {task.logs ? (
+              <Text dimColor>{task.logs}</Text>
+            ) : task.status === 'in_progress' ? (
+              <WaitingAnimation />
+            ) : (
+              <Text dimColor>No logs available</Text>
+            )}
           </Box>
         </>
       )}
 
       {task.error && (
         <>
-          <Box marginBottom={1} marginTop={1}>
-            <Text bold underline color="red">
+          <Box marginTop={1}>
+            <Text bold color="red">
               Error:
             </Text>
           </Box>
@@ -109,32 +142,6 @@ export function TaskDetailView({ task }: TaskDetailViewProps) {
           </Box>
         </>
       )}
-
-      {task.status === 'needs_action' && (
-        <Box marginTop={1} borderStyle="single" borderColor="yellow" paddingX={1}>
-          <Text color="yellow">
-            ⚠ This task needs your attention. Review the error above and consider:
-            {'\n'}- Running the task again with a more specific prompt
-            {'\n'}- Manually making changes in the worktree: {task.worktreePath}
-            {'\n'}- Using "cd .." to go back and create a new task
-          </Text>
-        </Box>
-      )}
-
-      {task.status === 'in_progress' && (
-        <Box marginTop={1} borderStyle="single" borderColor="blue" paddingX={1}>
-          <Text color="blue">
-            ◐ Claude is currently working on this task...
-            {'\n'}Changes are being made in: {task.worktreePath}
-          </Text>
-        </Box>
-      )}
-
-      <Box marginTop={2} borderStyle="single" borderColor="gray" paddingX={1}>
-        <Text dimColor>
-          Type "cd .." to return to the main task list
-        </Text>
-      </Box>
     </Box>
   );
 }

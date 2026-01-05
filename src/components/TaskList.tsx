@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
+import Spinner from 'ink-spinner';
 import type { Task } from '../types.js';
 import { getAllTasks } from '../store/tasks.js';
 
@@ -19,8 +20,24 @@ const STATUS_ICONS: Record<Task['status'], string> = {
   failed: '✗',
 };
 
+const STATUS_PRIORITY: Record<Task['status'], number> = {
+  needs_action: 1,
+  in_progress: 2,
+  pending: 3,
+  failed: 4,
+  completed: 5,
+};
+
+function sortTasksByPriority(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const priorityDiff = STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status];
+    if (priorityDiff !== 0) return priorityDiff;
+    return a.number - b.number;
+  });
+}
+
 export function TaskList() {
-  const tasks = getAllTasks();
+  const tasks = sortTasksByPriority(getAllTasks());
 
   if (tasks.length === 0) {
     return (
@@ -45,9 +62,28 @@ export function TaskList() {
   );
 }
 
+function AnimatedDots() {
+  const [dots, setDots] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => {
+        if (prev.length >= 3) return '';
+        return prev + '.';
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return <Text>{dots}</Text>;
+}
+
 function TaskRow({ task }: { task: Task }) {
   const statusColor = STATUS_COLORS[task.status];
   const statusIcon = STATUS_ICONS[task.status];
+  const isRunning = task.status === 'in_progress';
+  const needsAction = task.status === 'needs_action';
 
   return (
     <Box marginBottom={1}>
@@ -57,10 +93,16 @@ function TaskRow({ task }: { task: Task }) {
         </Text>
       </Box>
       <Box width={3}>
-        <Text color={statusColor}>{statusIcon}</Text>
+        {isRunning ? (
+          <Text color={statusColor}>
+            <Spinner type="dots" />
+          </Text>
+        ) : (
+          <Text color={statusColor}>{statusIcon}</Text>
+        )}
       </Box>
       <Box flexGrow={1}>
-        <Text>{task.name}</Text>
+        <Text bold={needsAction || isRunning}>{task.name}</Text>
       </Box>
       <Box width={20}>
         <Text color="gray" dimColor>
@@ -68,7 +110,16 @@ function TaskRow({ task }: { task: Task }) {
         </Text>
       </Box>
       <Box width={15}>
-        <Text color={statusColor}>{task.status}</Text>
+        {isRunning ? (
+          <Box>
+            <Text color={statusColor}>{task.status}</Text>
+            <AnimatedDots />
+          </Box>
+        ) : (
+          <Text color={statusColor} bold={needsAction}>
+            {task.status}
+          </Text>
+        )}
       </Box>
     </Box>
   );

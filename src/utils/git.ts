@@ -107,3 +107,32 @@ export function formatBranchName(prefix: string, taskName: string): string {
 
   return `${prefix}/${kebab}`;
 }
+
+export function updateFromRemote(worktreePath: string, branchName: string): string {
+  const cwd = worktreePath;
+  let output = '';
+
+  try {
+    execSync('git fetch origin', { cwd, stdio: 'pipe' });
+    output += 'Fetched latest from origin\n';
+
+    const gitInfo = getGitInfo();
+    try {
+      execSync(`git pull origin ${gitInfo.mainBranch} --rebase`, { cwd, encoding: 'utf-8' });
+      output += `Pulled and rebased from origin/${gitInfo.mainBranch}\n`;
+    } catch (e) {
+      output += `No changes from origin/${gitInfo.mainBranch}\n`;
+    }
+
+    try {
+      execSync(`git pull origin ${branchName}`, { cwd, encoding: 'utf-8' });
+      output += `Pulled latest from origin/${branchName}\n`;
+    } catch (e) {
+      output += `No changes from origin/${branchName}\n`;
+    }
+
+    return output;
+  } catch (error) {
+    throw new Error(`Failed to update from remote: ${error}`);
+  }
+}

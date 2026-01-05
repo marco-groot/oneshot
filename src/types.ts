@@ -11,6 +11,7 @@ export interface Task {
   updatedAt: string;
   result?: string;
   error?: string;
+  logs?: string;
 }
 
 export interface TaskStore {

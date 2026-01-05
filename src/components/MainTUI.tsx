@@ -7,7 +7,7 @@ import { setConfig, getConfig, clearConfig, runInteractiveConfig } from '../comm
 import { createAndExecuteTask } from '../services/task.js';
 import { getTaskByNumber } from '../store/tasks.js';
 
-type InputMode = 'command' | 'task_name' | 'task_prompt';
+type InputMode = 'command' | 'task_name' | 'task_prompt' | 'confirm_pr';
 type ViewMode = 'main' | 'task_detail';
 
 export function MainTUI() {
@@ -18,6 +18,7 @@ export function MainTUI() {
   const [taskName, setTaskName] = useState<string>('');
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [currentTaskNumber, setCurrentTaskNumber] = useState<number | null>(null);
+  const [pendingPrTaskNumber, setPendingPrTaskNumber] = useState<number | null>(null);
   const { exit } = useApp();
 
   const handleSubmit = async (value: string) => {
@@ -29,7 +30,7 @@ export function MainTUI() {
     if (inputMode === 'task_name') {
       setTaskName(trimmed);
       setInputMode('task_prompt');
-      setOutput('Enter task prompt (describe what you want Claude to do):');
+      setOutput('');
       return;
     }
 
@@ -48,6 +49,38 @@ export function MainTUI() {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         setOutput(`Error: ${errorMessage}`);
       }
+      return;
+    }
+
+    if (inputMode === 'confirm_pr') {
+      setInputMode('command');
+      const response = trimmed.toLowerCase();
+
+      if (response === 'y' || response === 'yes') {
+        if (pendingPrTaskNumber !== null) {
+          const task = getTaskByNumber(pendingPrTaskNumber);
+          if (task) {
+            setOutput(`Creating PR for task #${pendingPrTaskNumber}...`);
+            try {
+              const { commitAndPush, createPR } = await import('../utils/git.js');
+              const { updateTask } = await import('../store/tasks.js');
+
+              commitAndPush(task.worktreePath, task.branchName, task.name);
+              const prUrl = createPR(task.worktreePath, task.name, task.prompt);
+
+              updateTask(task.id, { prUrl });
+              setOutput(`✓ PR created: ${prUrl}`);
+              setRefresh((r) => r + 1);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+              setOutput(`✗ Failed to create PR: ${errorMessage}`);
+            }
+          }
+        }
+      } else {
+        setOutput('PR creation cancelled');
+      }
+      setPendingPrTaskNumber(null);
       return;
     }
 
@@ -78,7 +111,7 @@ export function MainTUI() {
 
       if (command === 'task') {
         setInputMode('task_name');
-        setOutput('Enter task name:');
+        setOutput('');
         return;
       }
 
@@ -106,13 +139,87 @@ export function MainTUI() {
         return;
       }
 
-      if (command === 'switch' && args.length === 2) {
-        const taskNumber = parseInt(args[1]);
-        const task = getTaskByNumber(taskNumber);
-        if (task) {
-          setOutput(`Switched to task #${taskNumber}: ${task.name}\nWorktree: ${task.worktreePath}`);
+      if (command === 'link') {
+        let taskNumber: number | null = null;
+
+        if (args.length === 2) {
+          taskNumber = parseInt(args[1]);
+        } else if (args.length === 1 && viewMode === 'task_detail' && currentTaskNumber !== null) {
+          taskNumber = currentTaskNumber;
+        }
+
+        if (taskNumber !== null) {
+          const task = getTaskByNumber(taskNumber);
+          if (task) {
+            if (task.prUrl) {
+              setOutput(`PR Link for Task #${taskNumber}:\n${task.prUrl}`);
+            } else {
+              setOutput('No PR created yet, would you like to create one? (y/n)');
+              setInputMode('confirm_pr');
+              setPendingPrTaskNumber(taskNumber);
+            }
+          } else {
+            setOutput(`Task #${taskNumber} not found`);
+          }
         } else {
-          setOutput(`Task #${taskNumber} not found`);
+          setOutput('Usage: link <number> or link (when in task detail view)');
+        }
+        return;
+      }
+
+      if (command === 'delete') {
+        let taskNumber: number | null = null;
+
+        if (args.length === 2) {
+          taskNumber = parseInt(args[1]);
+        } else if (args.length === 1 && viewMode === 'task_detail' && currentTaskNumber !== null) {
+          taskNumber = currentTaskNumber;
+        }
+
+        if (taskNumber !== null) {
+          const task = getTaskByNumber(taskNumber);
+          if (task) {
+            setOutput(`Deleting task #${taskNumber}: ${task.name}...`);
+            try {
+              const { removeWorktree } = await import('../utils/git.js');
+              const { deleteTask } = await import('../store/tasks.js');
+
+              removeWorktree(task.worktreePath);
+              deleteTask(task.id);
+
+              if (viewMode === 'task_detail' && currentTaskNumber === taskNumber) {
+                setViewMode('main');
+                setCurrentTaskNumber(null);
+              }
+
+              setOutput(`✓ Task #${taskNumber} deleted successfully`);
+              setRefresh((r) => r + 1);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+              setOutput(`✗ Failed to delete task: ${errorMessage}`);
+            }
+          } else {
+            setOutput(`Task #${taskNumber} not found`);
+          }
+        } else {
+          setOutput('Usage: delete <number> or delete (when in task detail view)');
+        }
+        return;
+      }
+
+      if (command === 'update' && viewMode === 'task_detail' && currentTaskNumber !== null) {
+        const task = getTaskByNumber(currentTaskNumber);
+        if (task) {
+          setOutput(`Updating task #${currentTaskNumber} from remote...`);
+          try {
+            const { updateFromRemote } = await import('../utils/git.js');
+            const result = updateFromRemote(task.worktreePath, task.branchName);
+            setOutput(`✓ Update complete:\n${result}`);
+            setRefresh((r) => r + 1);
+          } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+            setOutput(`✗ Failed to update: ${errorMessage}`);
+          }
         }
         return;
       }
@@ -130,21 +237,30 @@ export function MainTUI() {
       }
 
       if (command === 'help') {
-        setOutput(
-          'Available commands:\n' +
-          '  task                 - Create and execute a new task (interactive)\n' +
-          '  cd <number>          - Navigate into a specific task\n' +
-          '  cd ..                - Go back to main task list view\n' +
-          '  switch <number>      - Show worktree path for a task\n' +
-          '  tasks                - Refresh task list\n' +
-          '  config               - Interactive configuration\n' +
-          '  config set <k> <v>   - Set config value\n' +
-          '  config get <k>       - Get config value\n' +
-          '  config clear <k>     - Clear config value\n' +
-          '  clear                - Clear output\n' +
-          '  help                 - Show this help\n' +
-          '  exit/quit            - Exit the application'
-        );
+        const helpText = viewMode === 'task_detail'
+          ? 'Available commands:\n' +
+            '  cd ..                - Go back to main task list view\n' +
+            '  link                 - Get PR link for current task\n' +
+            '  update               - Pull latest changes from main and remote branch\n' +
+            '  delete               - Delete current task\n' +
+            '  clear                - Clear output\n' +
+            '  help                 - Show this help\n' +
+            '  exit/quit            - Exit the application'
+          : 'Available commands:\n' +
+            '  task                 - Create and execute a new task (interactive)\n' +
+            '  cd <number>          - Navigate into a specific task\n' +
+            '  link <number>        - Get PR link for task by number\n' +
+            '  delete <number>      - Delete a task by number\n' +
+            '  tasks                - Refresh task list\n' +
+            '  config               - Interactive configuration\n' +
+            '  config set <k> <v>   - Set config value\n' +
+            '  config get <k>       - Get config value\n' +
+            '  config clear <k>     - Clear config value\n' +
+            '  clear                - Clear output\n' +
+            '  help                 - Show this help\n' +
+            '  exit/quit            - Exit the application';
+
+        setOutput(helpText);
         return;
       }
 
@@ -155,14 +271,21 @@ export function MainTUI() {
   };
 
   const getPromptPrefix = () => {
-    if (inputMode === 'task_name') return 'Task name: ';
-    if (inputMode === 'task_prompt') return 'Task prompt: ';
+    if (inputMode === 'task_name') return 'Enter task name: ';
+    if (inputMode === 'task_prompt') return 'Enter task prompt: ';
+    if (inputMode === 'confirm_pr') return '(y/n): ';
     return '> ';
   };
 
   const getPromptColor = () => {
     if (inputMode === 'task_name' || inputMode === 'task_prompt') return 'yellow';
+    if (inputMode === 'confirm_pr') return 'cyan';
     return 'green';
+  };
+
+  const getPlaceholder = () => {
+    if (viewMode === 'task_detail') return 'type cd .. to go back';
+    return '';
   };
 
   const renderContent = () => {
@@ -177,7 +300,10 @@ export function MainTUI() {
 
   const getHeaderText = () => {
     if (viewMode === 'task_detail' && currentTaskNumber !== null) {
-      return `Task #${currentTaskNumber} - Type 'cd ..' to go back`;
+      const task = getTaskByNumber(currentTaskNumber);
+      if (task) {
+        return `Task #${currentTaskNumber}: ${task.name}`;
+      }
     }
     return 'Oneshot CLI - Type \'help\' for commands, \'exit\' to quit';
   };
@@ -204,7 +330,12 @@ export function MainTUI() {
         <Text color={getPromptColor()} bold>
           {getPromptPrefix()}
         </Text>
-        <TextInput value={input} onChange={setInput} onSubmit={handleSubmit} />
+        <TextInput
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSubmit}
+          placeholder={getPlaceholder()}
+        />
       </Box>
     </Box>
   );
