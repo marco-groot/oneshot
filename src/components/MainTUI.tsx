@@ -33,13 +33,25 @@ export function MainTUI() {
     setInput('');
 
     if (inputMode === 'task_name') {
+      if (trimmed === '/cancel' || trimmed === '/back') {
+        setInputMode('command');
+        setTaskName('');
+        setOutput('Task creation cancelled');
+        return;
+      }
       setTaskName(trimmed);
       setInputMode('task_prompt');
-      setOutput('');
+      setOutput("you can use /cancel or /back");
       return;
     }
 
     if (inputMode === 'task_prompt') {
+      if (trimmed === '/cancel' || trimmed === '/back') {
+        setInputMode('command');
+        setTaskName('');
+        setOutput('Task creation cancelled');
+        return;
+      }
       const prompt = trimmed;
       setInputMode('command');
       setIsExecutingTask(true);
@@ -98,15 +110,6 @@ export function MainTUI() {
       }
       setPendingPrTaskNumber(null);
       return;
-    }
-
-    if (trimmed === '/cancel' || trimmed === '/back') {
-      if (inputMode === 'task_name' || inputMode === 'task_prompt') {
-        setInputMode('command');
-        setTaskName('');
-        setOutput('Task creation cancelled');
-        return;
-      }
     }
 
     if (!trimmed.startsWith('/')) {
