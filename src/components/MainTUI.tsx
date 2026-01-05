@@ -100,7 +100,12 @@ export function MainTUI() {
       return;
     }
 
-    const args = trimmed.split(' ');
+    if (!trimmed.startsWith('/')) {
+      setOutput(`Commands must start with /. Type '/help' for available commands.`);
+      return;
+    }
+
+    const args = trimmed.slice(1).split(' ');
     const command = args[0];
 
     try {
@@ -119,7 +124,7 @@ export function MainTUI() {
         } else if (args[1] === 'clear' && args.length === 3) {
           clearConfig(args[2]);
         } else {
-          setOutput('Usage: config [set <key> <value> | get <key> | clear <key>]');
+          setOutput('Usage: /config [set <key> <value> | get <key> | clear <key>]');
         }
         setRefresh((r) => r + 1);
         return;
@@ -149,7 +154,7 @@ export function MainTUI() {
             }
           }
         } else {
-          setOutput('Usage: cd <number> or cd ..');
+          setOutput('Usage: /cd <number> or /cd ..');
         }
         setRefresh((r) => r + 1);
         return;
@@ -178,7 +183,7 @@ export function MainTUI() {
             setOutput(`Task #${taskNumber} not found`);
           }
         } else {
-          setOutput('Usage: link <number> or link (when in task detail view)');
+          setOutput('Usage: /link <number> or /link (when in task detail view)');
         }
         return;
       }
@@ -247,7 +252,7 @@ export function MainTUI() {
           setOutput(results.join('\n'));
           setRefresh((r) => r + 1);
         } else {
-          setOutput('Usage: delete <number> [<number> ...] or delete (when in task detail view)');
+          setOutput('Usage: /delete <number> [<number> ...] or /delete (when in task detail view)');
         }
         return;
       }
@@ -297,33 +302,33 @@ export function MainTUI() {
       if (command === 'help') {
         const helpText = viewMode === 'task_detail'
           ? 'Available commands:\n' +
-            '  cd ..                - Go back to main task list view\n' +
-            '  link                 - Get PR link for current task\n' +
-            '  update               - Pull latest changes from main and remote branch\n' +
-            '  delete               - Delete current task\n' +
-            '  clear                - Clear output\n' +
-            '  help                 - Show this help\n' +
-            '  exit/quit            - Exit the application'
+            '  /cd ..                - Go back to main task list view\n' +
+            '  /link                 - Get PR link for current task\n' +
+            '  /update               - Pull latest changes from main and remote branch\n' +
+            '  /delete               - Delete current task\n' +
+            '  /clear                - Clear output\n' +
+            '  /help                 - Show this help\n' +
+            '  /exit or /quit        - Exit the application'
           : 'Available commands:\n' +
-            '  task                 - Create and execute a new task (interactive)\n' +
-            '  cd <number>          - Navigate into a specific task\n' +
-            '  link <number>        - Get PR link for task by number\n' +
-            '  update               - Pull latest main/master and rebase\n' +
-            '  delete <number> ...  - Delete one or more tasks by number\n' +
-            '  tasks                - Refresh task list\n' +
-            '  config               - Interactive configuration\n' +
-            '  config set <k> <v>   - Set config value\n' +
-            '  config get <k>       - Get config value\n' +
-            '  config clear <k>     - Clear config value\n' +
-            '  clear                - Clear output\n' +
-            '  help                 - Show this help\n' +
-            '  exit/quit            - Exit the application';
+            '  /task                 - Create and execute a new task (interactive)\n' +
+            '  /cd <number>          - Navigate into a specific task\n' +
+            '  /link <number>        - Get PR link for task by number\n' +
+            '  /update               - Pull latest main/master and rebase\n' +
+            '  /delete <number> ...  - Delete one or more tasks by number\n' +
+            '  /tasks                - Refresh task list\n' +
+            '  /config               - Interactive configuration\n' +
+            '  /config set <k> <v>   - Set config value\n' +
+            '  /config get <k>       - Get config value\n' +
+            '  /config clear <k>     - Clear config value\n' +
+            '  /clear                - Clear output\n' +
+            '  /help                 - Show this help\n' +
+            '  /exit or /quit        - Exit the application';
 
         setOutput(helpText);
         return;
       }
 
-      setOutput(`Unknown command: ${command}. Type 'help' for available commands.`);
+      setOutput(`Unknown command: /${command}. Type '/help' for available commands.`);
     } catch (err) {
       setOutput(`Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
@@ -343,7 +348,7 @@ export function MainTUI() {
   };
 
   const getPlaceholder = () => {
-    if (viewMode === 'task_detail') return 'type cd .. to go back';
+    if (viewMode === 'task_detail') return 'type /cd .. to go back';
     return '';
   };
 
@@ -364,7 +369,7 @@ export function MainTUI() {
         return `Task #${currentTaskNumber}: ${task.name}`;
       }
     }
-    return 'Oneshot CLI - Type \'help\' for commands, \'exit\' to quit';
+    return 'Oneshot CLI - Type \'/help\' for commands, \'/exit\' to quit';
   };
 
   return (
