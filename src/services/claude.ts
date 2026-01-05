@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as os from 'os';
 import Conf from 'conf';
 import type { ClaudeResponse } from '../types.js';
+import type { ProgressStage } from '../components/LoadingProgress.js';
 
 const config = new Conf({ projectName: 'oneshot' });
 
@@ -64,7 +65,7 @@ export class ClaudeService {
   async executeTaskInWorktree(
     prompt: string,
     worktreePath: string,
-    onLog?: (log: string) => void
+    onLog?: (log: string, stage?: ProgressStage) => void
   ): Promise<ClaudeResponse> {
     return new Promise((resolve, reject) => {
       const fullPrompt = `You are working in a git worktree at: ${worktreePath}
@@ -78,7 +79,7 @@ Important:
 - Ensure all changes are saved
 - The changes will be automatically committed and pushed`;
 
-      onLog?.('Starting Claude CLI...\n');
+      onLog?.('Starting Claude CLI...\n', 'claude_init');
 
       const claudeProcess = spawn('claude', [
         '--print',
@@ -93,12 +94,16 @@ Important:
       let errorOutput = '';
       let fullLogs = 'Starting Claude CLI...\n';
       let hasReceivedData = false;
+      let currentStage: ProgressStage = 'claude_init';
+      let hasStartedThinking = false;
+      let hasStartedExecuting = false;
 
       if (claudeProcess.stdin) {
         claudeProcess.stdin.write(fullPrompt);
         claudeProcess.stdin.end();
-        onLog?.('Prompt sent to Claude...\n');
-        fullLogs += 'Prompt sent to Claude...\n';
+        onLog?.('Prompt sent to Claude, waiting for response...\n', 'claude_thinking');
+        fullLogs += 'Prompt sent to Claude, waiting for response...\n';
+        currentStage = 'claude_thinking';
       }
 
       claudeProcess.stdout?.on('data', (data) => {
@@ -106,8 +111,31 @@ Important:
         hasReceivedData = true;
         output += chunk;
         fullLogs += chunk;
+
+        // Detect when Claude starts thinking (analyzing the task)
+        if (!hasStartedThinking && chunk.trim().length > 0) {
+          hasStartedThinking = true;
+          currentStage = 'claude_thinking';
+        }
+
+        // Detect when Claude starts executing (making changes)
+        // This is a heuristic - if we see tool usage or file operations
+        if (!hasStartedExecuting && (
+          chunk.includes('tool_use') ||
+          chunk.includes('Writing') ||
+          chunk.includes('Editing') ||
+          chunk.includes('Reading') ||
+          chunk.includes('Created') ||
+          chunk.includes('Modified')
+        )) {
+          hasStartedExecuting = true;
+          currentStage = 'claude_executing';
+          onLog?.(chunk, 'claude_executing');
+          return;
+        }
+
         if (onLog) {
-          onLog(chunk);
+          onLog(chunk, currentStage);
         }
       });
 
@@ -117,7 +145,7 @@ Important:
         errorOutput += chunk;
         fullLogs += `[stderr] ${chunk}`;
         if (onLog) {
-          onLog(`[stderr] ${chunk}`);
+          onLog(`[stderr] ${chunk}`, currentStage);
         }
       });
 
