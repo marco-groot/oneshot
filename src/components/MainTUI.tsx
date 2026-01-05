@@ -3,6 +3,7 @@ import { Box, Text, useApp } from 'ink';
 import TextInput from 'ink-text-input';
 import { TaskList } from './TaskList.js';
 import { TaskDetailView } from './TaskDetailView.js';
+import { LoadingProgress, type ProgressStage } from './LoadingProgress.js';
 import { setConfig, getConfig, clearConfig, runInteractiveConfig } from '../commands/config.js';
 import { createAndExecuteTask } from '../services/task.js';
 import { getTaskByNumber } from '../store/tasks.js';
@@ -19,6 +20,9 @@ export function MainTUI() {
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [currentTaskNumber, setCurrentTaskNumber] = useState<number | null>(null);
   const [pendingPrTaskNumber, setPendingPrTaskNumber] = useState<number | null>(null);
+  const [isExecutingTask, setIsExecutingTask] = useState(false);
+  const [currentStage, setCurrentStage] = useState<ProgressStage>('worktree');
+  const [executionError, setExecutionError] = useState<string | undefined>();
   const { exit } = useApp();
 
   const handleSubmit = async (value: string) => {
@@ -37,17 +41,28 @@ export function MainTUI() {
     if (inputMode === 'task_prompt') {
       const prompt = trimmed;
       setInputMode('command');
-      setOutput(`Creating task "${taskName}" and executing...`);
+      setIsExecutingTask(true);
+      setExecutionError(undefined);
+      setCurrentStage('worktree');
+      setOutput('');
 
       try {
-        await createAndExecuteTask(taskName, prompt, (message) => {
-          setOutput(message);
+        await createAndExecuteTask(taskName, prompt, (progress) => {
+          setCurrentStage(progress.stage);
+          if (progress.message) {
+            setOutput(progress.message);
+          }
           setRefresh((r) => r + 1);
         });
         setRefresh((r) => r + 1);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setExecutionError(errorMessage);
         setOutput(`Error: ${errorMessage}`);
+      } finally {
+        setTimeout(() => {
+          setIsExecutingTask(false);
+        }, 2000);
       }
       return;
     }
@@ -327,10 +342,14 @@ export function MainTUI() {
       </Box>
 
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
-        {renderContent()}
+        {isExecutingTask ? (
+          <LoadingProgress currentStage={currentStage} error={executionError} />
+        ) : (
+          renderContent()
+        )}
       </Box>
 
-      {output && (
+      {output && !isExecutingTask && (
         <Box borderStyle="single" borderColor="gray" paddingX={1} marginY={1}>
           <Text>{output}</Text>
         </Box>
