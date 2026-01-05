@@ -100,6 +100,15 @@ export function MainTUI() {
       return;
     }
 
+    if (trimmed === '/cancel' || trimmed === '/back') {
+      if (inputMode === 'task_name' || inputMode === 'task_prompt') {
+        setInputMode('command');
+        setTaskName('');
+        setOutput('Task creation cancelled');
+        return;
+      }
+    }
+
     if (!trimmed.startsWith('/')) {
       setOutput(`Commands must start with /. Type '/help' for available commands.`);
       return;
@@ -132,7 +141,7 @@ export function MainTUI() {
 
       if (command === 'task') {
         setInputMode('task_name');
-        setOutput('');
+        setOutput("you can use /cancel or /back");
         return;
       }
 
