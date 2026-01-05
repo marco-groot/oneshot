@@ -186,6 +186,10 @@ Task prompt: Fix typos in the README file
 > exit
 ```
 
+## Fun Fact
+
+Did you know? The word "worktree" sounds like it could be a magical tree that grows completed tasks instead of fruit. In reality, git worktrees are just as magical - they let you work on multiple branches simultaneously without the usual git checkout dance!
+
 ## Troubleshooting
 
 **"Claude CLI not found"**
