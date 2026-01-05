@@ -3,6 +3,7 @@ import { Box, Text, useApp } from 'ink';
 import TextInput from 'ink-text-input';
 import { TaskList } from './TaskList.js';
 import { TaskDetailView } from './TaskDetailView.js';
+import { LoadingProgress, type ProgressStage } from './LoadingProgress.js';
 import { setConfig, getConfig, clearConfig, runInteractiveConfig } from '../commands/config.js';
 import { createAndExecuteTask } from '../services/task.js';
 import { getTaskByNumber } from '../store/tasks.js';
@@ -19,6 +20,9 @@ export function MainTUI() {
   const [viewMode, setViewMode] = useState<ViewMode>('main');
   const [currentTaskNumber, setCurrentTaskNumber] = useState<number | null>(null);
   const [pendingPrTaskNumber, setPendingPrTaskNumber] = useState<number | null>(null);
+  const [isExecutingTask, setIsExecutingTask] = useState(false);
+  const [currentStage, setCurrentStage] = useState<ProgressStage>('worktree');
+  const [executionError, setExecutionError] = useState<string | undefined>();
   const { exit } = useApp();
 
   const handleSubmit = async (value: string) => {
@@ -37,17 +41,28 @@ export function MainTUI() {
     if (inputMode === 'task_prompt') {
       const prompt = trimmed;
       setInputMode('command');
-      setOutput(`Creating task "${taskName}" and executing...`);
+      setIsExecutingTask(true);
+      setExecutionError(undefined);
+      setCurrentStage('worktree');
+      setOutput('');
 
       try {
-        await createAndExecuteTask(taskName, prompt, (message) => {
-          setOutput(message);
+        await createAndExecuteTask(taskName, prompt, (progress) => {
+          setCurrentStage(progress.stage);
+          if (progress.message) {
+            setOutput(progress.message);
+          }
           setRefresh((r) => r + 1);
         });
         setRefresh((r) => r + 1);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+        setExecutionError(errorMessage);
         setOutput(`Error: ${errorMessage}`);
+      } finally {
+        setTimeout(() => {
+          setIsExecutingTask(false);
+        }, 2000);
       }
       return;
     }
@@ -218,13 +233,26 @@ export function MainTUI() {
         return;
       }
 
-      if (command === 'update' && viewMode === 'task_detail' && currentTaskNumber !== null) {
-        const task = getTaskByNumber(currentTaskNumber);
-        if (task) {
-          setOutput(`Updating task #${currentTaskNumber} from remote...`);
+      if (command === 'update') {
+        if (viewMode === 'task_detail' && currentTaskNumber !== null) {
+          const task = getTaskByNumber(currentTaskNumber);
+          if (task) {
+            setOutput(`Updating task #${currentTaskNumber} from remote...`);
+            try {
+              const { updateFromRemote } = await import('../utils/git.js');
+              const result = updateFromRemote(task.worktreePath, task.branchName);
+              setOutput(`✓ Update complete:\n${result}`);
+              setRefresh((r) => r + 1);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+              setOutput(`✗ Failed to update: ${errorMessage}`);
+            }
+          }
+        } else if (viewMode === 'main') {
+          setOutput('Updating main branch from remote...');
           try {
-            const { updateFromRemote } = await import('../utils/git.js');
-            const result = updateFromRemote(task.worktreePath, task.branchName);
+            const { updateMainBranch } = await import('../utils/git.js');
+            const result = updateMainBranch();
             setOutput(`✓ Update complete:\n${result}`);
             setRefresh((r) => r + 1);
           } catch (err) {
@@ -261,6 +289,7 @@ export function MainTUI() {
             '  task                 - Create and execute a new task (interactive)\n' +
             '  cd <number>          - Navigate into a specific task\n' +
             '  link <number>        - Get PR link for task by number\n' +
+            '  update               - Pull latest main/master and rebase\n' +
             '  delete <number> ...  - Delete one or more tasks by number\n' +
             '  tasks                - Refresh task list\n' +
             '  config               - Interactive configuration\n' +
@@ -328,10 +357,14 @@ export function MainTUI() {
       </Box>
 
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
-        {renderContent()}
+        {isExecutingTask ? (
+          <LoadingProgress currentStage={currentStage} error={executionError} />
+        ) : (
+          renderContent()
+        )}
       </Box>
 
-      {output && (
+      {output && !isExecutingTask && (
         <Box borderStyle="single" borderColor="gray" paddingX={1} marginY={1}>
           <Text>{output}</Text>
         </Box>

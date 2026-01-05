@@ -123,6 +123,39 @@ export function formatBranchName(prefix: string, taskName: string): string {
   return `${prefix}/${kebab}`;
 }
 
+export function updateMainBranch(): string {
+  let output = '';
+
+  try {
+    const gitInfo = getGitInfo();
+    const currentBranch = execSync('git branch --show-current', { encoding: 'utf-8' }).trim();
+
+    execSync('git fetch origin', { stdio: 'pipe' });
+    output += 'Fetched latest from origin\n';
+
+    if (currentBranch !== gitInfo.mainBranch) {
+      execSync(`git checkout ${gitInfo.mainBranch}`, { stdio: 'pipe' });
+      output += `Switched to ${gitInfo.mainBranch}\n`;
+    }
+
+    try {
+      execSync(`git pull origin ${gitInfo.mainBranch} --rebase`, { encoding: 'utf-8' });
+      output += `Pulled and rebased from origin/${gitInfo.mainBranch}\n`;
+    } catch (e) {
+      output += `Already up to date with origin/${gitInfo.mainBranch}\n`;
+    }
+
+    if (currentBranch !== gitInfo.mainBranch) {
+      execSync(`git checkout ${currentBranch}`, { stdio: 'pipe' });
+      output += `Switched back to ${currentBranch}\n`;
+    }
+
+    return output;
+  } catch (error) {
+    throw new Error(`Failed to update main branch: ${error}`);
+  }
+}
+
 export function updateFromRemote(worktreePath: string, branchName: string): string {
   const cwd = worktreePath;
   let output = '';

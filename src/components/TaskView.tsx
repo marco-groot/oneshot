@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
-import Spinner from 'ink-spinner';
 import type { Task } from '../types.js';
 import { createAndExecuteTask } from '../services/task.js';
+import { LoadingProgress, type ProgressStage } from './LoadingProgress.js';
 
 interface TaskViewProps {
   taskName: string;
@@ -14,7 +14,7 @@ export function TaskView({ taskName, onComplete }: TaskViewProps) {
   const [status, setStatus] = useState<'creating' | 'executing' | 'done' | 'error'>('creating');
   const [result, setResult] = useState<string>('');
   const [error, setError] = useState<string>('');
-  const [progress, setProgress] = useState<string>('Creating task...');
+  const [currentStage, setCurrentStage] = useState<ProgressStage>('worktree');
 
   useEffect(() => {
     async function run() {
@@ -24,8 +24,8 @@ export function TaskView({ taskName, onComplete }: TaskViewProps) {
         const completedTask = await createAndExecuteTask(
           taskName,
           taskName,
-          (message) => {
-            setProgress(message);
+          (progress) => {
+            setCurrentStage(progress.stage);
           }
         );
         setTask(completedTask);
@@ -37,7 +37,7 @@ export function TaskView({ taskName, onComplete }: TaskViewProps) {
         setStatus('error');
       }
 
-      setTimeout(onComplete, 100);
+      setTimeout(onComplete, 2000);
     }
 
     run();
@@ -51,38 +51,21 @@ export function TaskView({ taskName, onComplete }: TaskViewProps) {
         </Text>
       </Box>
 
-      {status === 'creating' && (
-        <Box>
-          <Text color="green">
-            <Spinner type="dots" />
-          </Text>
-          <Text> Creating task...</Text>
-        </Box>
-      )}
-
-      {status === 'executing' && (
-        <Box>
-          <Text color="green">
-            <Spinner type="dots" />
-          </Text>
-          <Text> {progress}</Text>
-        </Box>
+      {(status === 'creating' || status === 'executing') && (
+        <LoadingProgress currentStage={currentStage} />
       )}
 
       {status === 'done' && (
         <Box flexDirection="column">
-          <Text color="green">Task completed!</Text>
+          <LoadingProgress currentStage="completed" />
           <Box marginTop={1}>
-            <Text>{result}</Text>
+            <Text color="green">✓ PR created: {task?.prUrl || 'N/A'}</Text>
           </Box>
         </Box>
       )}
 
       {status === 'error' && (
-        <Box flexDirection="column">
-          <Text color="red">Task failed!</Text>
-          <Text color="red">{error}</Text>
-        </Box>
+        <LoadingProgress currentStage={currentStage} error={error} />
       )}
     </Box>
   );
