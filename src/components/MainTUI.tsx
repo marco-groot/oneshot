@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Box, Text, useApp } from 'ink';
-import TextInput from 'ink-text-input';
 import { TaskList } from './TaskList.js';
 import { TaskDetailView } from './TaskDetailView.js';
 import { LoadingProgress, type ProgressStage } from './LoadingProgress.js';
+import { CommandAutocomplete, isValidCommand } from './CommandAutocomplete.js';
+import { ColoredTextInput } from './ColoredTextInput.js';
 import { setConfig, getConfig, clearConfig, runInteractiveConfig } from '../commands/config.js';
 import { createAndExecuteTask } from '../services/task.js';
 import { getTaskByNumber } from '../store/tasks.js';
@@ -347,6 +348,18 @@ export function MainTUI() {
     return 'green';
   };
 
+  const getInputColor = () => {
+    if (inputMode !== 'command') return undefined;
+    if (input.startsWith('/') && isValidCommand(input, viewMode === 'task_detail')) {
+      return 'cyan';
+    }
+    return undefined;
+  };
+
+  const shouldShowAutocomplete = () => {
+    return inputMode === 'command' && input.startsWith('/') && !input.includes(' ');
+  };
+
   const getPlaceholder = () => {
     if (viewMode === 'task_detail') return 'type /cd .. to go back';
     return '';
@@ -401,15 +414,22 @@ export function MainTUI() {
         </Box>
       )}
 
-      <Box borderStyle="single" borderColor={getPromptColor()} paddingX={1}>
+      <CommandAutocomplete
+        input={input}
+        isTaskDetail={viewMode === 'task_detail'}
+        visible={shouldShowAutocomplete()}
+      />
+
+      <Box borderStyle="single" borderColor={getInputColor() || getPromptColor()} paddingX={1}>
         <Text color={getPromptColor()} bold>
           {getPromptPrefix()}
         </Text>
-        <TextInput
+        <ColoredTextInput
           value={input}
           onChange={setInput}
           onSubmit={handleSubmit}
           placeholder={getPlaceholder()}
+          color={getInputColor()}
         />
       </Box>
     </Box>
