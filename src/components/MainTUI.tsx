@@ -181,10 +181,11 @@ export function MainTUI() {
           if (task) {
             setOutput(`Deleting task #${taskNumber}: ${task.name}...`);
             try {
-              const { removeWorktree } = await import('../utils/git.js');
+              const { removeWorktree, deleteBranch } = await import('../utils/git.js');
               const { deleteTask } = await import('../store/tasks.js');
 
               removeWorktree(task.worktreePath);
+              deleteBranch(task.branchName);
               deleteTask(task.id);
 
               if (viewMode === 'task_detail' && currentTaskNumber === taskNumber) {
@@ -192,7 +193,7 @@ export function MainTUI() {
                 setCurrentTaskNumber(null);
               }
 
-              setOutput(`✓ Task #${taskNumber} deleted successfully`);
+              setOutput(`✓ Task #${taskNumber} deleted (worktree, branch, and remote cleaned up)`);
               setRefresh((r) => r + 1);
             } catch (err) {
               const errorMessage = err instanceof Error ? err.message : 'Unknown error';

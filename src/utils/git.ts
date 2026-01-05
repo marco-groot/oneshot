@@ -42,7 +42,8 @@ export function createWorktree(branchName: string, taskId: string): string {
   const worktreePath = path.join(worktreesDir, taskId);
 
   try {
-    execSync(`git fetch origin ${gitInfo.mainBranch}`, { stdio: 'pipe' });
+    execSync(`git fetch origin`, { stdio: 'pipe' });
+    execSync(`git fetch origin ${gitInfo.mainBranch}:${gitInfo.mainBranch}`, { stdio: 'pipe' });
   } catch (e) {
     console.warn('Warning: Could not fetch from origin');
   }
@@ -64,6 +65,20 @@ export function removeWorktree(worktreePath: string): void {
     execSync(`git worktree remove "${worktreePath}" --force`, { stdio: 'pipe' });
   } catch (error) {
     console.warn(`Warning: Could not remove worktree: ${error}`);
+  }
+}
+
+export function deleteBranch(branchName: string): void {
+  try {
+    execSync(`git push origin --delete "${branchName}"`, { stdio: 'pipe' });
+  } catch (error) {
+    console.warn(`Warning: Could not delete remote branch: ${error}`);
+  }
+
+  try {
+    execSync(`git branch -D "${branchName}"`, { stdio: 'pipe' });
+  } catch (error) {
+    console.warn(`Warning: Could not delete local branch: ${error}`);
   }
 }
 
