@@ -168,41 +168,51 @@ export function MainTUI() {
       }
 
       if (command === 'delete') {
-        let taskNumber: number | null = null;
+        let taskNumbers: number[] = [];
 
-        if (args.length === 2) {
-          taskNumber = parseInt(args[1]);
+        if (args.length >= 2) {
+          taskNumbers = args.slice(1).map((arg) => parseInt(arg)).filter((n) => !isNaN(n));
         } else if (args.length === 1 && viewMode === 'task_detail' && currentTaskNumber !== null) {
-          taskNumber = currentTaskNumber;
+          taskNumbers = [currentTaskNumber];
         }
 
-        if (taskNumber !== null) {
-          const task = getTaskByNumber(taskNumber);
-          if (task) {
-            setOutput(`Deleting task #${taskNumber}: ${task.name}...`);
-            try {
-              const { removeWorktree } = await import('../utils/git.js');
-              const { deleteTask } = await import('../store/tasks.js');
+        if (taskNumbers.length > 0) {
+          const { removeWorktree } = await import('../utils/git.js');
+          const { deleteTask } = await import('../store/tasks.js');
 
-              removeWorktree(task.worktreePath);
-              deleteTask(task.id);
+          const results: string[] = [];
+          let shouldExitTaskDetail = false;
 
-              if (viewMode === 'task_detail' && currentTaskNumber === taskNumber) {
-                setViewMode('main');
-                setCurrentTaskNumber(null);
+          for (const taskNumber of taskNumbers) {
+            const task = getTaskByNumber(taskNumber);
+            if (task) {
+              try {
+                removeWorktree(task.worktreePath);
+                deleteTask(task.id);
+
+                if (viewMode === 'task_detail' && currentTaskNumber === taskNumber) {
+                  shouldExitTaskDetail = true;
+                }
+
+                results.push(`✓ Task #${taskNumber} deleted successfully`);
+              } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                results.push(`✗ Failed to delete task #${taskNumber}: ${errorMessage}`);
               }
-
-              setOutput(`✓ Task #${taskNumber} deleted successfully`);
-              setRefresh((r) => r + 1);
-            } catch (err) {
-              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-              setOutput(`✗ Failed to delete task: ${errorMessage}`);
+            } else {
+              results.push(`✗ Task #${taskNumber} not found`);
             }
-          } else {
-            setOutput(`Task #${taskNumber} not found`);
           }
+
+          if (shouldExitTaskDetail) {
+            setViewMode('main');
+            setCurrentTaskNumber(null);
+          }
+
+          setOutput(results.join('\n'));
+          setRefresh((r) => r + 1);
         } else {
-          setOutput('Usage: delete <number> or delete (when in task detail view)');
+          setOutput('Usage: delete <number> [<number> ...] or delete (when in task detail view)');
         }
         return;
       }
@@ -250,7 +260,7 @@ export function MainTUI() {
             '  task                 - Create and execute a new task (interactive)\n' +
             '  cd <number>          - Navigate into a specific task\n' +
             '  link <number>        - Get PR link for task by number\n' +
-            '  delete <number>      - Delete a task by number\n' +
+            '  delete <number> ...  - Delete one or more tasks by number\n' +
             '  tasks                - Refresh task list\n' +
             '  config               - Interactive configuration\n' +
             '  config set <k> <v>   - Set config value\n' +
