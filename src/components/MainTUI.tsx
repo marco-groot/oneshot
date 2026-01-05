@@ -217,13 +217,26 @@ export function MainTUI() {
         return;
       }
 
-      if (command === 'update' && viewMode === 'task_detail' && currentTaskNumber !== null) {
-        const task = getTaskByNumber(currentTaskNumber);
-        if (task) {
-          setOutput(`Updating task #${currentTaskNumber} from remote...`);
+      if (command === 'update') {
+        if (viewMode === 'task_detail' && currentTaskNumber !== null) {
+          const task = getTaskByNumber(currentTaskNumber);
+          if (task) {
+            setOutput(`Updating task #${currentTaskNumber} from remote...`);
+            try {
+              const { updateFromRemote } = await import('../utils/git.js');
+              const result = updateFromRemote(task.worktreePath, task.branchName);
+              setOutput(`✓ Update complete:\n${result}`);
+              setRefresh((r) => r + 1);
+            } catch (err) {
+              const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+              setOutput(`✗ Failed to update: ${errorMessage}`);
+            }
+          }
+        } else if (viewMode === 'main') {
+          setOutput('Updating main branch from remote...');
           try {
-            const { updateFromRemote } = await import('../utils/git.js');
-            const result = updateFromRemote(task.worktreePath, task.branchName);
+            const { updateMainBranch } = await import('../utils/git.js');
+            const result = updateMainBranch();
             setOutput(`✓ Update complete:\n${result}`);
             setRefresh((r) => r + 1);
           } catch (err) {
@@ -260,6 +273,7 @@ export function MainTUI() {
             '  task                 - Create and execute a new task (interactive)\n' +
             '  cd <number>          - Navigate into a specific task\n' +
             '  link <number>        - Get PR link for task by number\n' +
+            '  update               - Pull latest main/master and rebase\n' +
             '  delete <number> ...  - Delete one or more tasks by number\n' +
             '  tasks                - Refresh task list\n' +
             '  config               - Interactive configuration\n' +
