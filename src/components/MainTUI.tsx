@@ -383,10 +383,15 @@ export function MainTUI() {
       <Box flexDirection="column" flexGrow={1} paddingX={1}>
         {isExecutingTask ? (
           <LoadingProgress currentStage={currentStage} error={executionError} mode="execution" />
-        ) : isDeletingTask ? (
-          <LoadingProgress currentStage={currentStage} error={executionError} mode="deletion" />
         ) : (
-          renderContent()
+          <>
+            {renderContent()}
+            {isDeletingTask && (
+              <Box marginTop={1}>
+                <LoadingProgress currentStage={currentStage} error={executionError} mode="deletion" />
+              </Box>
+            )}
+          </>
         )}
       </Box>
 
